@@ -204,6 +204,7 @@ function render() {
   const wonRev=raw.CLOSED_WON.reduce((s,r)=>s+parseCur(r.estimated_annual_revenue),0);
   const quotedVal=quotes.reduce((s,q)=>s+q._amt,0);
   const wr=(nW+nL)>0?Math.round(nW/(nW+nL)*100):0;
+  const today = new Date().toISOString().slice(0,10);
 
   // KPIs
   const kpis = [
@@ -318,7 +319,6 @@ function render() {
   });
 
   // Overdue
-  const today = new Date().toISOString().slice(0,10);
   const overdue = quotes.filter(q=>q.followup_date && q.followup_date<today && norm(q.status)==="open");
   document.getElementById("overdue-title").textContent = `Overdue Follow-ups — ${overdue.length}`;
   if (overdue.length) {
