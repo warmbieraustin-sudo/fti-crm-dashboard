@@ -101,6 +101,20 @@
     </div>
     <!-- Closed -->
     <div id="view-closed" class="section">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Date Range Filter</div>
+        <div style="display:flex;gap:16px;align-items:center;margin-top:12px">
+          <div style="flex:1">
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:4px">From</label>
+            <input type="date" id="closed-from-date" style="width:100%;padding:8px;border:1px solid #1e293b;background:#0a0e17;color:#e2e8f0;border-radius:6px;font-family:monospace">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:4px">To</label>
+            <input type="date" id="closed-to-date" style="width:100%;padding:8px;border:1px solid #1e293b;background:#0a0e17;color:#e2e8f0;border-radius:6px;font-family:monospace">
+          </div>
+          <button onclick="clearClosedDateFilter()" style="align-self:flex-end;background:transparent;border:1px solid #1e293b;padding:8px 12px;color:#64748b;cursor:pointer;border-radius:6px;font-size:11px;font-family:monospace">Clear</button>
+        </div>
+      </div>
       <div class="grid g2">
         <div class="card"><div class="card-title" id="won-title">Closed Won</div><div style="overflow-x:auto"><table id="won-table"></table></div></div>
         <div class="card"><div class="card-title" id="lost-title">Closed Lost</div><div style="overflow-x:auto"><table id="lost-table"></table></div></div>
@@ -359,27 +373,49 @@ function render() {
     }).join("") : `<tr><td colspan="9" class="empty">No quotes yet</td></tr>`}</tbody>`;
 
   // ── CLOSED ──
-  document.getElementById("won-title").textContent = `Closed Won — ${nW} deals · ${fmt(wonRev)}`;
+  const fromDate = document.getElementById("closed-from-date").value;
+  const toDate = document.getElementById("closed-to-date").value;
+  
+  // Filter by date range
+  const filteredWon = raw.CLOSED_WON.filter(d=>{
+    if(!fromDate && !toDate) return true;
+    const dDate = d.date_closed;
+    if(fromDate && dDate < fromDate) return false;
+    if(toDate && dDate > toDate) return false;
+    return true;
+  });
+  
+  const filteredLost = raw.CLOSED_LOST.filter(d=>{
+    if(!fromDate && !toDate) return true;
+    const dDate = d.date_closed;
+    if(fromDate && dDate < fromDate) return false;
+    if(toDate && dDate > toDate) return false;
+    return true;
+  });
+  
+  const wonRev2 = filteredWon.reduce((s,r)=>s+parseCur(r.estimated_annual_revenue),0);
+  
+  document.getElementById("won-title").textContent = `Closed Won — ${filteredWon.length} deals · ${fmt(wonRev2)}`;
   document.getElementById("won-table").innerHTML = `
     <thead><tr>${["Company","Industry","Service","Revenue","Closed"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${nW ? raw.CLOSED_WON.sort((a,b)=>parseCur(b.estimated_annual_revenue)-parseCur(a.estimated_annual_revenue)).map(d=>`<tr>
+    <tbody>${filteredWon.length ? filteredWon.sort((a,b)=>parseCur(b.estimated_annual_revenue)-parseCur(a.estimated_annual_revenue)).map(d=>`<tr>
       <td style="font-weight:600;color:${C.green}">${d.company_name}</td>
       <td>${badge(d.industry,IC)}</td>
       <td style="color:${C.muted};font-size:11px">${d.service_interest}</td>
       <td class="mono" style="color:${C.white}">${fmt(parseCur(d.estimated_annual_revenue))}</td>
       <td class="mono" style="font-size:11px;color:${C.muted}">${d.date_closed||""}</td>
-    </tr>`).join("") : `<tr><td colspan="5" class="empty">No won deals yet</td></tr>`}</tbody>`;
+    </tr>`).join("") : `<tr><td colspan="5" class="empty">No deals in date range</td></tr>`}</tbody>`;
 
-  document.getElementById("lost-title").textContent = `Closed Lost — ${nL} deals`;
+  document.getElementById("lost-title").textContent = `Closed Lost — ${filteredLost.length} deals`;
   document.getElementById("lost-table").innerHTML = `
     <thead><tr>${["Company","Industry","Source","Revenue","Notes"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${nL ? raw.CLOSED_LOST.map(d=>`<tr>
+    <tbody>${filteredLost.length ? filteredLost.map(d=>`<tr>
       <td style="font-weight:600;color:${C.pink}">${d.company_name}</td>
       <td>${badge(d.industry,IC)}</td>
       <td style="color:${C.muted};font-size:11px">${d.lead_source}</td>
       <td class="mono" style="color:${C.white}">${fmt(parseCur(d.estimated_annual_revenue))}</td>
       <td style="color:${C.muted};font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes||""}</td>
-    </tr>`).join("") : `<tr><td colspan="5" class="empty">No lost deals yet</td></tr>`}</tbody>`;
+    </tr>`).join("") : `<tr><td colspan="5" class="empty">No deals in date range</td></tr>`}</tbody>`;
 
   // Win rate by source
   if (nW+nL > 0) {
@@ -398,6 +434,23 @@ function render() {
     document.getElementById("winrate-card").style.display = "none";
   }
 }
+
+// Date filter handlers
+function onClosedDateChange() {
+  render();
+}
+
+function clearClosedDateFilter() {
+  document.getElementById("closed-from-date").value = "";
+  document.getElementById("closed-to-date").value = "";
+  render();
+}
+
+// Attach date filter listeners
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById("closed-from-date").addEventListener("change", onClosedDateChange);
+  document.getElementById("closed-to-date").addEventListener("change", onClosedDateChange);
+});
 
 // Init — refresh cache v2
 loadAll();
