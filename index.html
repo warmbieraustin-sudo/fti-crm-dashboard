@@ -287,20 +287,22 @@ function render() {
   const active = [...raw.LEADS.map(r=>({...r,_stage:"New"})),...raw.QUOTED_LEADS.map(r=>({...r,_stage:"Quoted"}))]
     .sort((a,b)=>parseCur(b.estimated_annual_revenue)-parseCur(a.estimated_annual_revenue));
   document.getElementById("leads-table").innerHTML = `
-    <thead><tr>${["Company","Contact","Industry","Service","Source","Est. Annual","Probability","Stage"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <thead><tr>${["Company","Contact","Phone","Industry","Est. Annual","Probability","Notes","Follow-up","Stage"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${active.length ? active.map(d=>{
       const stCol = d._stage==="New"?C.cyan:C.violet;
+      const followup = raw.QUOTES.find(q=>q.lead_id===d.lead_id)?.followup_date || "—";
       return `<tr>
-        <td style="font-weight:600;color:${C.white}">${d.company_name}</td>
-        <td style="color:${C.muted}">${d.contact_person}</td>
-        <td>${badge(d.industry,IC)}</td>
-        <td style="color:${C.muted};font-size:11px">${d.service_interest}</td>
-        <td style="color:${C.muted};font-size:11px">${d.lead_source}</td>
-        <td class="mono" style="color:${C.white}">${fmt(parseCur(d.estimated_annual_revenue))}</td>
-        <td style="width:140px">${probBar(parsePct(d.close_probability))}</td>
-        <td><span class="badge" style="background:${stCol}18;color:${stCol}">${d._stage}</span></td>
+        <td style="font-weight:600;color:${C.white};font-size:12px">${d.company_name}</td>
+        <td style="color:${C.muted};font-size:11px">${d.contact_person}</td>
+        <td style="color:${C.muted};font-size:11px;font-family:monospace">${d.phone||"—"}</td>
+        <td style="font-size:11px">${badge(d.industry,IC)}</td>
+        <td class="mono" style="color:${C.white};font-size:11px">${fmt(parseCur(d.estimated_annual_revenue))}</td>
+        <td style="width:80px;font-size:11px">${probBar(parsePct(d.close_probability))}</td>
+        <td style="color:${C.muted};font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes||"—"}</td>
+        <td style="color:${C.muted};font-size:11px;font-family:monospace">${followup}</td>
+        <td><span class="badge" style="background:${stCol}18;color:${stCol};font-size:9px">${d._stage}</span></td>
       </tr>`;
-    }).join("") : `<tr><td colspan="8" class="empty">No active leads</td></tr>`}</tbody>`;
+    }).join("") : `<tr><td colspan="9" class="empty">No active leads</td></tr>`}</tbody>`;
 
   // ── QUOTES ──
   // Service chart
@@ -320,13 +322,16 @@ function render() {
   document.getElementById("overdue-title").textContent = `Overdue Follow-ups — ${overdue.length}`;
   if (overdue.length) {
     document.getElementById("overdue-content").innerHTML = `<div style="overflow-x:auto"><table>
-      <thead><tr>${["Lead ID","Service","Quoted","Follow-up"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
-      <tbody>${overdue.map(q=>`<tr>
-        <td class="mono" style="font-size:11px;color:${C.white}">${q.lead_id}</td>
-        <td>${badge(q.service_type,SVC)}</td>
-        <td class="mono" style="color:${C.white}">${fmt(q._amt)}</td>
-        <td class="mono overdue" style="font-size:11px">${q.followup_date}</td>
-      </tr>`).join("")}</tbody></table></div>`;
+      <thead><tr>${["Customer","Service","Quoted","Follow-up"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${overdue.map(q=>{
+        const leadInfo = [...raw.LEADS,...raw.QUOTED_LEADS].find(l=>l.lead_id===q.lead_id) || {};
+        return `<tr>
+          <td style="font-weight:600;color:${C.white};font-size:11px">${leadInfo.company_name||"—"}</td>
+          <td>${badge(q.service_type,SVC)}</td>
+          <td class="mono" style="color:${C.white}">${fmt(q._amt)}</td>
+          <td class="mono overdue" style="font-size:11px">${q.followup_date}</td>
+        </tr>`;
+      }).join("")}</tbody></table></div>`;
   } else {
     document.getElementById("overdue-content").innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:140px;color:${C.green};font-size:13px">All follow-ups are current</div>`;
   }
@@ -335,19 +340,20 @@ function render() {
   document.getElementById("quotes-title").textContent = `All Quotes — ${quotes.length} total`;
   const sortedQ = [...quotes].sort((a,b)=>b._amt-a._amt);
   document.getElementById("quotes-table").innerHTML = `
-    <thead><tr>${["Quote ID","Lead ID","Service","$/Part","Parts/Yr","Total","Quoted","Follow-up","Notes"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <thead><tr>${["Customer","Contact","Service","$/Part","Parts/Yr","Total","Quoted","Follow-up","Notes"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${sortedQ.length ? sortedQ.map(q=>{
+      const leadInfo = [...raw.LEADS,...raw.QUOTED_LEADS].find(l=>l.lead_id===q.lead_id) || {};
       const od = q.followup_date && q.followup_date < today;
       return `<tr>
-        <td class="mono" style="font-size:10px;color:${C.muted}">${q.quote_id}</td>
-        <td class="mono" style="font-size:10px;color:${C.cyan}">${q.lead_id}</td>
+        <td style="font-weight:600;color:${C.white};font-size:12px">${leadInfo.company_name||"—"}</td>
+        <td style="color:${C.muted};font-size:11px">${leadInfo.contact_person||"—"}</td>
         <td>${badge(q.service_type,SVC)}</td>
         <td class="mono" style="color:${C.white}">${fmt(q._ppp)}</td>
         <td class="mono" style="color:${C.muted}">${q._ppy.toLocaleString()}</td>
         <td class="mono" style="color:${C.white};font-weight:600">${fmt(q._amt)}</td>
         <td class="mono" style="font-size:11px;color:${C.muted}">${q.date_quoted}</td>
         <td class="mono" style="font-size:11px;color:${od?C.red:C.muted}">${q.followup_date}</td>
-        <td style="color:${C.muted};font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.notes||""}</td>
+        <td style="color:${C.muted};font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.notes||"—"}</td>
       </tr>`;
     }).join("") : `<tr><td colspan="9" class="empty">No quotes yet</td></tr>`}</tbody>`;
 
