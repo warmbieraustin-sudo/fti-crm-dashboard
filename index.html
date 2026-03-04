@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FTI CRM — Pipeline Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0e17; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+    .header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .header-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #22d3ee; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 2px; }
+    .header h1 { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; color: #fff; line-height: 1.1; }
+    .tabs { display: flex; gap: 4px; align-items: center; }
+    .tab { background: transparent; border: 1px solid #1e293b; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 600; cursor: pointer; color: #64748b; transition: all 0.15s; }
+    .tab.active { color: #0a0e17; border-color: transparent; }
+    .tab[data-color="cyan"].active { background: #22d3ee; }
+    .tab[data-color="violet"].active { background: #a78bfa; }
+    .tab[data-color="green"].active { background: #34d399; }
+    .refresh-btn { background: transparent; border: 1px solid #1e293b; border-radius: 6px; padding: 5px 10px; font-size: 11px; color: #64748b; cursor: pointer; font-family: 'JetBrains Mono', monospace; margin-left: 8px; }
+    .refresh-btn:hover { border-color: #334155; color: #e2e8f0; }
+    .grid { display: grid; gap: 12px; margin-bottom: 16px; }
+    .g6 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .g3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .g2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+    .card { background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; }
+    .card-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: #64748b; }
+    .kpi-val { font-size: 26px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; line-height: 1.1; }
+    .kpi-sub { font-size: 11px; color: #64748b; }
+    .chart-wrap { position: relative; width: 100%; }
+    .chart-wrap canvas { width: 100% !important; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0 3px; font-size: 12px; }
+    th { text-align: left; padding: 6px 10px; font-size: 9px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; font-weight: 600; border-bottom: 1px solid #1e293b; }
+    td { padding: 8px 10px; }
+    tbody tr { transition: background 0.15s; }
+    tbody tr:hover { background: #1e293b; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .prob-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .prob-bar-track { flex: 1; height: 5px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+    .prob-bar-fill { height: 100%; border-radius: 3px; }
+    .prob-bar-label { font-size: 11px; font-family: monospace; color: #64748b; min-width: 30px; text-align: right; }
+    .empty { text-align: center; padding: 24px; color: #64748b; font-size: 12px; }
+    .footer { text-align: center; padding: 16px 0 6px; font-size: 10px; color: #64748b; font-family: 'JetBrains Mono', monospace; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+    .funnel-row { display: flex; align-items: center; gap: 10px; }
+    .funnel-label { width: 70px; font-size: 10px; color: #64748b; font-family: monospace; text-align: right; flex-shrink: 0; }
+    .funnel-bar { height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; min-width: 28px; opacity: 0.85; }
+    .funnel-bar span { font-size: 11px; font-weight: 700; color: #0a0e17; }
+    .loading { text-align: center; padding: 80px 20px; color: #64748b; font-size: 14px; font-family: monospace; }
+    .overdue { color: #ef4444; }
+    .section { display: none; }
+    .section.active { display: block; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="header-label">FTI CRM</div>
+      <h1>Pipeline Dashboard</h1>
+    </div>
+    <div style="display:flex;align-items:center;">
+      <div class="tabs">
+        <button class="tab active" data-view="pipeline" data-color="cyan" onclick="switchView('pipeline')">Pipeline</button>
+        <button class="tab" data-view="quotes" data-color="violet" onclick="switchView('quotes')">Quotes</button>
+        <button class="tab" data-view="closed" data-color="green" onclick="switchView('closed')">Closed</button>
+      </div>
+      <button class="refresh-btn" onclick="loadAll()">&#8635; Refresh</button>
+    </div>
+  </div>
+  <div id="loading" class="loading">Loading CRM data from Google Sheets...</div>
+  <div id="content" style="display:none;">
+    <!-- KPIs -->
+    <div class="grid g6" id="kpi-row"></div>
+    <!-- Pipeline -->
+    <div id="view-pipeline" class="section active">
+      <div class="grid g3">
+        <div class="card"><div class="card-title">Conversion Funnel</div><div id="funnel"></div></div>
+        <div class="card"><div class="card-title">Revenue by Industry</div><div class="chart-wrap"><canvas id="chart-industry" height="180"></canvas></div></div>
+        <div class="card"><div class="card-title">Leads by Source</div><div class="chart-wrap"><canvas id="chart-source" height="180"></canvas></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="card"><div class="card-title">Close Probability Distribution</div><div class="chart-wrap"><canvas id="chart-prob" height="160"></canvas></div></div>
+        <div class="card"><div class="card-title">Lead Activity Over Time</div><div class="chart-wrap"><canvas id="chart-time" height="160"></canvas></div></div>
+      </div>
+      <div class="card"><div class="card-title" id="leads-title">Active Leads</div><div style="overflow-x:auto"><table id="leads-table"></table></div></div>
+    </div>
+    <!-- Quotes -->
+    <div id="view-quotes" class="section">
+      <div class="grid g2">
+        <div class="card"><div class="card-title">Quoted Value by Service Type</div><div class="chart-wrap"><canvas id="chart-service" height="180"></canvas></div></div>
+        <div class="card"><div class="card-title" id="overdue-title">Overdue Follow-ups</div><div id="overdue-content"></div></div>
+      </div>
+      <div class="card"><div class="card-title" id="quotes-title">All Quotes</div><div style="overflow-x:auto"><table id="quotes-table"></table></div></div>
+    </div>
+    <!-- Closed -->
+    <div id="view-closed" class="section">
+      <div class="grid g2">
+        <div class="card"><div class="card-title" id="won-title">Closed Won</div><div style="overflow-x:auto"><table id="won-table"></table></div></div>
+        <div class="card"><div class="card-title" id="lost-title">Closed Lost</div><div style="overflow-x:auto"><table id="lost-table"></table></div></div>
+      </div>
+      <div class="card" id="winrate-card" style="display:none;"><div class="card-title">Win Rate by Lead Source</div><div class="chart-wrap"><canvas id="chart-winrate" height="140"></canvas></div></div>
+    </div>
+  </div>
+  <div class="footer">
+    <span>FTI CRM Dashboard</span>
+    <span id="refresh-time"></span>
+    <span>Data updates ~5 min after Sheet edits</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+const BASE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6WeeNYkZTawcNwpZfy9oPGsnjadIszaMk432d5EBDoIx96SApWSop1iBtYEK13Xu-nNjdLylKzA1Z/pub?output=csv";
+const URLS = {
+  LEADS:        BASE + "&gid=916620379",
+  QUOTED_LEADS: BASE + "&gid=0",
+  QUOTES:       BASE + "&gid=583962071",
+  CLOSED_WON:   BASE + "&gid=134972017",
+  CLOSED_LOST:  BASE + "&gid=2145085222",
+};
+
+const C = { cyan:"#22d3ee", violet:"#a78bfa", pink:"#f472b6", green:"#34d399", orange:"#fb923c", yellow:"#facc15", red:"#ef4444", blue:"#3b82f6", white:"#fff", muted:"#64748b", bg:"#0a0e17" };
+const IC = { aerospace:C.cyan, automotive:C.violet, medical:C.pink, manufacturing:C.orange, other:C.yellow };
+const SC = { referral:C.cyan, "cold call":C.yellow, "trade show":C.orange, inbound:C.green, "existing customer":C.violet };
+const SVC = { anodize:C.cyan, passivate:C.violet, "anodize + passivate":C.orange, other:C.yellow };
+
+const pick = (m,k) => m[(k||"").toLowerCase()] || C.blue;
+const fmt = n => "$" + Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+const fmtK = n => n >= 1000 ? "$"+(n/1000).toFixed(0)+"k" : fmt(n);
+const parseCur = v => typeof v==="number" ? v : parseFloat(String(v||"").replace(/[$,\s]/g,""))||0;
+const parsePct = v => parseFloat(String(v||"").replace(/%/g,""))||0;
+const norm = v => (v||"").toString().trim().toLowerCase();
+
+let charts = {};
+let raw = { LEADS:[], QUOTED_LEADS:[], QUOTES:[], CLOSED_WON:[], CLOSED_LOST:[] };
+
+function fetchTab(url) {
+  return new Promise(resolve => {
+    Papa.parse(url, { download:true, header:true, skipEmptyLines:true,
+      complete: r => resolve(r.data||[]), error: () => resolve([]) });
+  });
+}
+
+async function loadAll() {
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("content").style.display = "none";
+  const [a,b,c,d,e] = await Promise.all([
+    fetchTab(URLS.LEADS), fetchTab(URLS.QUOTED_LEADS), fetchTab(URLS.QUOTES),
+    fetchTab(URLS.CLOSED_WON), fetchTab(URLS.CLOSED_LOST)
+  ]);
+  raw = { LEADS:a, QUOTED_LEADS:b, QUOTES:c, CLOSED_WON:d, CLOSED_LOST:e };
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("content").style.display = "block";
+  document.getElementById("refresh-time").textContent = "Refreshed " + new Date().toLocaleTimeString();
+  render();
+}
+
+function switchView(v) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view===v));
+  document.querySelectorAll(".section").forEach(s => s.classList.toggle("active", s.id==="view-"+v));
+}
+
+function badge(text, colorMap) {
+  const c = pick(colorMap, text);
+  return `<span class="badge" style="background:${c}18;color:${c}">${text||"—"}</span>`;
+}
+
+function probBar(val) {
+  const col = val>=70 ? C.green : val>=40 ? C.orange : C.pink;
+  return `<div class="prob-bar-wrap"><div class="prob-bar-track"><div class="prob-bar-fill" style="width:${val}%;background:${col}"></div></div><span class="prob-bar-label">${val}%</span></div>`;
+}
+
+function makeChart(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  Chart.defaults.color = C.muted;
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.font.size = 10;
+  charts[id] = new Chart(ctx, cfg);
+}
+
+function render() {
+  const allLeads = [
+    ...raw.LEADS.map(r=>({...r,_stage:"New"})),
+    ...raw.QUOTED_LEADS.map(r=>({...r,_stage:"Quoted"})),
+    ...raw.CLOSED_WON.map(r=>({...r,_stage:"Won"})),
+    ...raw.CLOSED_LOST.map(r=>({...r,_stage:"Lost"})),
+  ];
+  const quotes = raw.QUOTES.map(q=>({...q,_amt:parseCur(q.quoted_amount),_ppp:parseCur(q.price_per_part),_ppy:parseInt(q.parts_per_year)||0}));
+  const nNew=raw.LEADS.length, nQ=raw.QUOTED_LEADS.length, nW=raw.CLOSED_WON.length, nL=raw.CLOSED_LOST.length;
+  const total=allLeads.length;
+  const pipeline=raw.QUOTED_LEADS.reduce((s,r)=>s+parseCur(r.estimated_annual_revenue),0);
+  const weighted=raw.QUOTED_LEADS.reduce((s,r)=>s+parseCur(r.estimated_annual_revenue)*(parsePct(r.close_probability)/100),0);
+  const wonRev=raw.CLOSED_WON.reduce((s,r)=>s+parseCur(r.estimated_annual_revenue),0);
+  const quotedVal=quotes.reduce((s,q)=>s+q._amt,0);
+  const wr=(nW+nL)>0?Math.round(nW/(nW+nL)*100):0;
+
+  // KPIs
+  const kpis = [
+    {l:"Total Leads",v:total,s:`${nNew} new · ${nQ} quoted`,c:C.cyan},
+    {l:"Active Pipeline",v:fmtK(pipeline),s:`${nQ} opportunities`,c:C.violet},
+    {l:"Weighted Pipeline",v:fmtK(Math.round(weighted)),s:"probability-adjusted",c:C.blue},
+    {l:"Total Quoted",v:fmtK(quotedVal),s:`${quotes.length} quotes`,c:C.orange},
+    {l:"Won Revenue",v:fmtK(wonRev),s:`${nW} deals`,c:C.green},
+    {l:"Win Rate",v:wr+"%",s:`${nW}W / ${nL}L`,c:wr>=50?C.green:C.pink},
+  ];
+  document.getElementById("kpi-row").innerHTML = kpis.map(k=>`
+    <div class="card"><div class="card-title">${k.l}</div>
+    <div class="kpi-val" style="color:${k.c}">${k.v}</div>
+    <div class="kpi-sub">${k.s}</div></div>`).join("");
+
+  // ── PIPELINE ──
+  // Funnel
+  const funnel = [
+    {name:"All Leads",val:total,col:C.cyan},
+    {name:"Quoted",val:nQ+nW+nL,col:C.violet},
+    {name:"Closed",val:nW+nL,col:C.orange},
+    {name:"Won",val:nW,col:C.green},
+  ];
+  document.getElementById("funnel").innerHTML = funnel.map(f=>{
+    const w = total ? Math.max((f.val/total)*100,8) : 8;
+    return `<div class="funnel-row"><div class="funnel-label">${f.name}</div><div style="flex:1"><div class="funnel-bar" style="width:${w}%;background:${f.col}"><span>${f.val}</span></div></div></div>`;
+  }).join("");
+
+  // Industry donut
+  const indM = {};
+  allLeads.forEach(r=>{ const k=norm(r.industry)||"unknown"; indM[k]=(indM[k]||0)+parseCur(r.estimated_annual_revenue); });
+  const indData = Object.entries(indM).sort((a,b)=>b[1]-a[1]);
+  makeChart("chart-industry", {
+    type:"doughnut",
+    data:{ labels:indData.map(d=>d[0]), datasets:[{data:indData.map(d=>d[1]), backgroundColor:indData.map(d=>pick(IC,d[0])), borderWidth:0, hoverOffset:6}] },
+    options:{ cutout:"55%", plugins:{legend:{display:true,position:"bottom",labels:{boxWidth:8,padding:8,font:{size:10}}},
+      tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmt(ctx.raw)}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // Source bar
+  const srcM = {};
+  allLeads.forEach(r=>{ const k=norm(r.lead_source)||"unknown"; srcM[k]=(srcM[k]||0)+1; });
+  const srcData = Object.entries(srcM).sort((a,b)=>b[1]-a[1]);
+  makeChart("chart-source", {
+    type:"bar",
+    data:{ labels:srcData.map(d=>d[0]), datasets:[{data:srcData.map(d=>d[1]), backgroundColor:srcData.map(d=>pick(SC,d[0])), borderRadius:4, barThickness:18}] },
+    options:{ indexAxis:"y", plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+" leads"}}},
+      scales:{x:{display:false},y:{grid:{display:false}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // Probability
+  const bk = {"0-25%":0,"26-50%":0,"51-75%":0,"76-100%":0};
+  const bkC = {"0-25%":C.pink,"26-50%":C.orange,"51-75%":C.violet,"76-100%":C.green};
+  [...raw.LEADS,...raw.QUOTED_LEADS].forEach(r=>{
+    const p=parsePct(r.close_probability);
+    if(p<=25) bk["0-25%"]++; else if(p<=50) bk["26-50%"]++;
+    else if(p<=75) bk["51-75%"]++; else bk["76-100%"]++;
+  });
+  makeChart("chart-prob", {
+    type:"bar",
+    data:{ labels:Object.keys(bk), datasets:[{data:Object.values(bk), backgroundColor:Object.keys(bk).map(k=>bkC[k]), borderRadius:4, barThickness:32}] },
+    options:{ plugins:{legend:{display:false}}, scales:{x:{grid:{display:false}},y:{grid:{color:"#1e293b"},ticks:{stepSize:1}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // Timeline
+  const tmM = {};
+  allLeads.forEach(r=>{ const d=(r.date_created||"").slice(0,7); if(!d) return; if(!tmM[d]) tmM[d]={created:0,won:0}; tmM[d].created++; if(r._stage==="Won") tmM[d].won++; });
+  const tmData = Object.entries(tmM).sort((a,b)=>a[0].localeCompare(b[0]));
+  makeChart("chart-time", {
+    type:"line",
+    data:{ labels:tmData.map(d=>d[0]),
+      datasets:[
+        {label:"Created",data:tmData.map(d=>d[1].created),borderColor:C.cyan,backgroundColor:C.cyan+"30",tension:0.3,pointRadius:3,fill:true},
+        {label:"Won",data:tmData.map(d=>d[1].won),borderColor:C.green,backgroundColor:C.green+"30",tension:0.3,pointRadius:3,fill:true}
+      ]},
+    options:{ plugins:{legend:{position:"bottom",labels:{boxWidth:8,padding:8}}}, scales:{x:{grid:{display:false}},y:{grid:{color:"#1e293b"},ticks:{stepSize:1}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // Active leads table
+  document.getElementById("leads-title").textContent = `Active Leads — ${nNew+nQ} open`;
+  const active = [...raw.LEADS.map(r=>({...r,_stage:"New"})),...raw.QUOTED_LEADS.map(r=>({...r,_stage:"Quoted"}))]
+    .sort((a,b)=>parseCur(b.estimated_annual_revenue)-parseCur(a.estimated_annual_revenue));
+  document.getElementById("leads-table").innerHTML = `
+    <thead><tr>${["Company","Contact","Industry","Service","Source","Est. Annual","Probability","Stage"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${active.length ? active.map(d=>{
+      const stCol = d._stage==="New"?C.cyan:C.violet;
+      return `<tr>
+        <td style="font-weight:600;color:${C.white}">${d.company_name}</td>
+        <td style="color:${C.muted}">${d.contact_person}</td>
+        <td>${badge(d.industry,IC)}</td>
+        <td style="color:${C.muted};font-size:11px">${d.service_interest}</td>
+        <td style="color:${C.muted};font-size:11px">${d.lead_source}</td>
+        <td class="mono" style="color:${C.white}">${fmt(parseCur(d.estimated_annual_revenue))}</td>
+        <td style="width:140px">${probBar(parsePct(d.close_probability))}</td>
+        <td><span class="badge" style="background:${stCol}18;color:${stCol}">${d._stage}</span></td>
+      </tr>`;
+    }).join("") : `<tr><td colspan="8" class="empty">No active leads</td></tr>`}</tbody>`;
+
+  // ── QUOTES ──
+  // Service chart
+  const svcM = {};
+  quotes.forEach(q=>{ const k=norm(q.service_type)||"unknown"; svcM[k]=(svcM[k]||0)+q._amt; });
+  const svcData = Object.entries(svcM).sort((a,b)=>b[1]-a[1]);
+  makeChart("chart-service", {
+    type:"bar",
+    data:{ labels:svcData.map(d=>d[0]), datasets:[{data:svcData.map(d=>d[1]), backgroundColor:svcData.map(d=>pick(SVC,d[0])), borderRadius:4, barThickness:36}] },
+    options:{ plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}},
+      scales:{x:{grid:{display:false}},y:{grid:{color:"#1e293b"},ticks:{callback:v=>fmtK(v)}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // Overdue
+  const today = new Date().toISOString().slice(0,10);
+  const overdue = quotes.filter(q=>q.followup_date && q.followup_date<today && norm(q.status)==="open");
+  document.getElementById("overdue-title").textContent = `Overdue Follow-ups — ${overdue.length}`;
+  if (overdue.length) {
+    document.getElementById("overdue-content").innerHTML = `<div style="overflow-x:auto"><table>
+      <thead><tr>${["Lead ID","Service","Quoted","Follow-up"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${overdue.map(q=>`<tr>
+        <td class="mono" style="font-size:11px;color:${C.white}">${q.lead_id}</td>
+        <td>${badge(q.service_type,SVC)}</td>
+        <td class="mono" style="color:${C.white}">${fmt(q._amt)}</td>
+        <td class="mono overdue" style="font-size:11px">${q.followup_date}</td>
+      </tr>`).join("")}</tbody></table></div>`;
+  } else {
+    document.getElementById("overdue-content").innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:140px;color:${C.green};font-size:13px">All follow-ups are current</div>`;
+  }
+
+  // Quotes table
+  document.getElementById("quotes-title").textContent = `All Quotes — ${quotes.length} total`;
+  const sortedQ = [...quotes].sort((a,b)=>b._amt-a._amt);
+  document.getElementById("quotes-table").innerHTML = `
+    <thead><tr>${["Quote ID","Lead ID","Service","$/Part","Parts/Yr","Total","Quoted","Follow-up","Notes"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${sortedQ.length ? sortedQ.map(q=>{
+      const od = q.followup_date && q.followup_date < today;
+      return `<tr>
+        <td class="mono" style="font-size:10px;color:${C.muted}">${q.quote_id}</td>
+        <td class="mono" style="font-size:10px;color:${C.cyan}">${q.lead_id}</td>
+        <td>${badge(q.service_type,SVC)}</td>
+        <td class="mono" style="color:${C.white}">${fmt(q._ppp)}</td>
+        <td class="mono" style="color:${C.muted}">${q._ppy.toLocaleString()}</td>
+        <td class="mono" style="color:${C.white};font-weight:600">${fmt(q._amt)}</td>
+        <td class="mono" style="font-size:11px;color:${C.muted}">${q.date_quoted}</td>
+        <td class="mono" style="font-size:11px;color:${od?C.red:C.muted}">${q.followup_date}</td>
+        <td style="color:${C.muted};font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.notes||""}</td>
+      </tr>`;
+    }).join("") : `<tr><td colspan="9" class="empty">No quotes yet</td></tr>`}</tbody>`;
+
+  // ── CLOSED ──
+  document.getElementById("won-title").textContent = `Closed Won — ${nW} deals · ${fmt(wonRev)}`;
+  document.getElementById("won-table").innerHTML = `
+    <thead><tr>${["Company","Industry","Service","Revenue","Closed"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${nW ? raw.CLOSED_WON.sort((a,b)=>parseCur(b.estimated_annual_revenue)-parseCur(a.estimated_annual_revenue)).map(d=>`<tr>
+      <td style="font-weight:600;color:${C.green}">${d.company_name}</td>
+      <td>${badge(d.industry,IC)}</td>
+      <td style="color:${C.muted};font-size:11px">${d.service_interest}</td>
+      <td class="mono" style="color:${C.white}">${fmt(parseCur(d.estimated_annual_revenue))}</td>
+      <td class="mono" style="font-size:11px;color:${C.muted}">${d.date_closed||""}</td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty">No won deals yet</td></tr>`}</tbody>`;
+
+  document.getElementById("lost-title").textContent = `Closed Lost — ${nL} deals`;
+  document.getElementById("lost-table").innerHTML = `
+    <thead><tr>${["Company","Industry","Source","Revenue","Notes"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${nL ? raw.CLOSED_LOST.map(d=>`<tr>
+      <td style="font-weight:600;color:${C.pink}">${d.company_name}</td>
+      <td>${badge(d.industry,IC)}</td>
+      <td style="color:${C.muted};font-size:11px">${d.lead_source}</td>
+      <td class="mono" style="color:${C.white}">${fmt(parseCur(d.estimated_annual_revenue))}</td>
+      <td style="color:${C.muted};font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes||""}</td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty">No lost deals yet</td></tr>`}</tbody>`;
+
+  // Win rate by source
+  if (nW+nL > 0) {
+    document.getElementById("winrate-card").style.display = "";
+    const closed = [...raw.CLOSED_WON,...raw.CLOSED_LOST];
+    const wm = {};
+    closed.forEach(r=>{ const k=norm(r.lead_source)||"unknown"; if(!wm[k]) wm[k]={w:0,l:0}; if(norm(r.status)==="won") wm[k].w++; else wm[k].l++; });
+    const wrData = Object.entries(wm).map(([n,v])=>({n,rate:Math.round(v.w/(v.w+v.l)*100)})).sort((a,b)=>b.rate-a.rate);
+    makeChart("chart-winrate", {
+      type:"bar",
+      data:{ labels:wrData.map(d=>d.n), datasets:[{data:wrData.map(d=>d.rate), backgroundColor:C.green, borderRadius:4, barThickness:14}] },
+      options:{ indexAxis:"y", plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+"%"}}},
+        scales:{x:{max:100,grid:{color:"#1e293b"},ticks:{callback:v=>v+"%"}},y:{grid:{display:false}}}, responsive:true, maintainAspectRatio:false }
+    });
+  } else {
+    document.getElementById("winrate-card").style.display = "none";
+  }
+}
+
+// Init
+loadAll();
+</script>
+</body>
+</html>
