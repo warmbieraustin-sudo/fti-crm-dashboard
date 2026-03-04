@@ -290,7 +290,8 @@ function render() {
     <thead><tr>${["Company","Contact","Phone","Industry","Est. Annual","Probability","Notes","Follow-up","Stage"].map(h=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${active.length ? active.map(d=>{
       const stCol = d._stage==="New"?C.cyan:C.violet;
-      const followup = raw.QUOTES.find(q=>q.lead_id===d.lead_id)?.followup_date || "—";
+      const followup = d.followup_date || "—";
+      const isOverdue = followup !== "—" && followup < today;
       return `<tr>
         <td style="font-weight:600;color:${C.white};font-size:12px">${d.company_name}</td>
         <td style="color:${C.muted};font-size:11px">${d.contact_person}</td>
@@ -299,7 +300,7 @@ function render() {
         <td class="mono" style="color:${C.white};font-size:11px">${fmt(parseCur(d.estimated_annual_revenue))}</td>
         <td style="width:80px;font-size:11px">${probBar(parsePct(d.close_probability))}</td>
         <td style="color:${C.muted};font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes||"—"}</td>
-        <td style="color:${C.muted};font-size:11px;font-family:monospace">${followup}</td>
+        <td style="color:${isOverdue?C.red:C.muted};font-size:11px;font-family:monospace">${followup}</td>
         <td><span class="badge" style="background:${stCol}18;color:${stCol};font-size:9px">${d._stage}</span></td>
       </tr>`;
     }).join("") : `<tr><td colspan="9" class="empty">No active leads</td></tr>`}</tbody>`;
